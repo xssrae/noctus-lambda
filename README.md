@@ -1,139 +1,142 @@
-# Desafio - Vaga Analista Junior - ETL Pipeline com PySpark
+# Pipeline ETL Serverless e Arquitetura de Infraestrutura (FinOps)
 
-Este projeto implementa um pipeline ETL (Extract, Transform, Load) utilizando PySpark para integrar dados de clientes e vendas, gerar resumos por cliente e relatórios financeiros por produto. O sistema ingere dados de fontes heterogêneas, realiza limpeza, aplica regras de negócio complexas e entrega dados estruturados prontos para análise (Data Lake).
+Este projeto implementa a evolução de um pipeline de ETL (Extract, Transform, Load) em lote para uma arquitetura **Serverless orientada a eventos na AWS**. 
 
-![etl](https://github.com/xssrae/etl-pyspark/blob/main/img/etl.jpeg)
+O sistema consome mensagens/eventos de vendas transmitidos via **Apache Kafka** em tempo real, enriquece as transações cruzando-as com uma base cadastral de clientes hospedada no **Amazon S3** (com otimização de cache em memória) e armazena os dados finais no Data Lake na camada consolidada (**Curated**) de forma particionada (Hive Partitioning).
 
-## 🚀 Funcionalidades
+Toda a infraestrutura é provisionada via **Terraform** seguindo rígidos conceitos de **FinOps**, garantindo a operação dentro do **AWS Free Tier** (Limite Gratuito) através de regras de ciclo de vida automáticas no S3 e limites de orçamento configurados no AWS Budgets.
 
-* **Ingestão de Dados:**
-    * Leitura de CSV com inferência de schema (`clientes.csv`).
-    * Leitura e parsing manual de arquivos de texto posicional/Fixed-Width (`vendas.txt`).
-* **Transformação & Data Quality:**
-    * Tratamento de tipos de dados (Inteiros, Decimais com ajuste de escala, Datas).
-    * Enriquecimento de dados (Cálculo de idade e categorização de faixa etária).
-    * Cruzamento de dados (Joins) entre transações e dimensões.
-* **Particionamento (Data Lake):**
-    * Output detalhado organizado em diretórios particionados por data (`data_venda=YYYY-MM-DD`), otimizando consultas futuras.
-* **Analytics:**
-    * Geração de KPIs financeiros por produto e cliente.
-    * Insights sobre ticket médio e comportamento demográfico.
+---
 
 ## 🛠️ Tecnologias Utilizadas
 
-* **Linguagem:** Python 3
-* **Motor de Processamento:** PySpark (Apache Spark)
-* **Bibliotecas Auxiliares:** `csv`, `os`, `shutil`, `unittest` (Testes), `random` (Mock Data).
-* **Ambiente:** Executável localmente (Windows/Linux/Mac) sem dependência de instalação completa do Hadoop (Winutils bypass).
+* **Linguagem:** Python 3.10
+* **Computação/Serverless:** AWS Lambda
+* **Armazenamento (Data Lake):** Amazon S3
+* **Orquestração/Agendamento:** Amazon EventBridge (CloudWatch Events)
+* **Ingestão/Mensageria:** Apache Kafka (Self-Managed ou AWS MSK)
+* **Infraestrutura como Código (IaC):** Terraform >= 1.0.0
+* **FinOps:** AWS Budgets & Políticas de Ciclo de Vida do S3 (S3 Lifecycle Rules)
+* **Bibliotecas Auxiliares:** `boto3` (AWS SDK para Python), `csv`, `json`, `base64`, `unittest`
 
 ---
 
 ## 📂 Estrutura do Projeto
 
 ```text
-├── dados/                  # Diretório de entrada (Gerado automaticamente)
-│   ├── clientes.csv        # Cadastro de clientes
-│   └── vendas.txt          # Arquivo posicional legado
-├── output/                 # Diretório de saída
-│   ├── resumo_clientes.csv # KPI consolidado por cliente
-│   ├── balanco_produtos.csv# KPI consolidado por produto
-│   └── vendas_detalhadas/  # Dataset particionado (Data Lake)
-├── etl_pipeline.py         # Código principal do Pipeline
-├── gerar_vendas_massivo.py # Script para gerar volume de vendas fake
-├── test_etl.py             # Testes Automatizados (Unitários)
-└── README.md               # Documentação
-````
+├── src/
+│   └── lambda_function.py     # Código principal do pipeline ETL na AWS Lambda
+├── terraform/
+│   ├── main.tf                # Configurações de provedor (AWS) e variáveis globais
+│   ├── s3.tf                  # Criação de buckets (Raw/Curated) e regras de ciclo de vida S3
+│   ├── lambda.tf              # Recursos da AWS Lambda, permissões IAM e variáveis de ambiente
+│   ├── eventbridge.tf         # Disparador diário agendado para o Lambda
+│   └── finops_budgets.tf      # Orçamento AWS Budgets e alertas de e-mail para custos
+├── test_lambda.py             # Suite de testes unitários e mocks para a Função Lambda
+├── .gitignore                 # Arquivos ignorados pelo Git
+└── README.md                  # Documentação do projeto
+```
 
 ---
 
-## ▶️ Como Executar o Pipeline
+## 🚀 Arquitetura e Fluxo de Dados
 
-Siga os passos abaixo para rodar o projeto no seu ambiente local.
+```mermaid
+graph LR
+    subgraph Ingestão
+        Kafka[Apache Kafka] -- "Mensagens de Vendas\n(Base64 JSON)" --> Lambda
+    end
 
-### 1\. Pré-requisitos
+    subgraph AWS Lambda [Processamento Serverless]
+        Lambda[lambda_function.py]
+        Cache[(Cache Memória\nWarm Start)] <--> Lambda
+    end
 
-Certifique-se de ter o Python instalado. Instale as dependências necessárias:
+    subgraph Amazon S3 [Armazenamento / Data Lake]
+        S3Raw[(Bucket Raw\nclientes.csv)] -- "S3 GET (Carga/Recarga)" --> Cache
+        Lambda -- "JSON Particionado\ndata_venda=YYYY-MM-DD/" --> S3Curated[(Bucket Curated\nzero-cost-etl-dev-curated-data)]
+    end
 
-```bash
-pip install pyspark pandas matplotlib
+    subgraph Monitoramento & FinOps
+        EventBridge[EventBridge] -- "Gatilho Diário" --> Lambda
+        Budget[AWS Budgets] -. "Alerta se > $0.01" .-> Email[E-mail]
+    end
 ```
 
-### 2\. Gerar Massa de Dados
+### 1. Ingestão & Processamento (AWS Lambda)
+A função [lambda_function.py](file:///c:/Projetos/etl-pyspark/src/lambda_function.py) é acionada por eventos do Apache Kafka. Ela decodifica o payload base64 que contém a transação de venda e processa os dados de forma individual.
 
-Como os arquivos de dados brutos não são versionados, você deve executar os scripts geradores para criar a pasta `dados/` com informações simuladas:
+### 2. Otimização de Carga de Dimensão (Warm Start Cache)
+Para evitar que o Lambda faça requisições GET constantes ao S3 a cada mensagem recebida (reduzindo latência e economizando custos com requisições do S3), a base cadastral [clientes.csv](file:///c:/Projetos/etl-pyspark/src/lambda_function.py#L15) é armazenada temporariamente na memória do contêiner (`CACHE_CLIENTES`). 
+* O cache é atualizado caso esteja vazio ou tenha sido carregado há mais de **10 minutos** (600 segundos).
+
+### 3. Transformação & Qualidade de Dados
+* **Cálculo de Idade:** Calcula a idade aproximada com base no ano corrente e a data de nascimento do cliente.
+* **Faixa Etária:** Classifica o cliente em quatro grupos:
+  * `Menor de Idade` (< 18 anos)
+  * `Jovem Adulto (18-29)` (18 a 29 anos)
+  * `Adulto (30-49)` (30 a 49 anos)
+  * `Senior (50+)` (>= 50 anos)
+* **Join:** Enriquece a transação injetando nome, idade e faixa etária do cliente.
+
+### 4. Particionamento (Data Lake)
+As transações enriquecidas são salvas individualmente em formato JSON no bucket de dados consolidados (Curated), imitando o formato de particionamento Hive:
+`vendas_detalhadas/data_venda=YYYY-MM-DD/venda_ID.json`
+
+---
+
+## 💵 Governança de Custos e FinOps
+
+Para assegurar que o projeto nunca gere custos indesejados durante o desenvolvimento ou testes, as seguintes proteções foram implementadas via Terraform:
+
+1. **AWS Budgets ([finops_budgets.tf](file:///c:/Projetos/etl-pyspark/terraform/finops_budgets.tf)):**
+   * Configura um orçamento mensal de **USD 0.01** (1 centavo).
+   * Dispara um e-mail de alerta caso os custos reais atinjam **80%** do limite (USD 0.008) ou caso a projeção (Forecasted) mensal atinja **100%** do limite.
+2. **Ciclo de Vida no S3 ([s3.tf](file:///c:/Projetos/etl-pyspark/terraform/s3.tf#L50-L86)):**
+   * **Dados Brutos (Raw):** Expiração automática após **14 dias** e exclusão de versões não correntes após **7 dias**.
+   * **Dados Consolidados (Curated):** Expiração automática após **90 dias** e exclusão de versões não correntes após **30 dias**.
+   * Isso evita o acúmulo de arquivos que excedam o limite gratuito de **5 GB** do Amazon S3.
+
+---
+
+## 🛠️ Como Implantar a Infraestrutura (Terraform)
+
+### 1. Pré-requisitos
+* Ter o [Terraform](https://www.terraform.io/) instalado localmente.
+* Credenciais da AWS configuradas no seu ambiente (`aws configure` ou via variáveis de ambiente).
+
+### 2. Inicialização e Deploy
+Navegue até a pasta de infraestrutura e execute os comandos:
 
 ```bash
-# Gera 50.000 registros de vendas (com simulação de churn/inatividade)
-python gerar_vendas_massivo.py
+cd terraform
+terraform init
+terraform plan
+terraform apply
 ```
 
-### 3\. Executar o ETL
+*Nota: Por padrão, os buckets S3 e o Lambda serão criados na região `us-east-1` sob o ambiente `dev` (`zero-cost-etl-dev-raw-data` e `zero-cost-etl-dev-curated-data`).*
 
-Execute o script principal. O Spark processará os arquivos, aplicará as regras de negócio e salvará os resultados na pasta `output/`.
-
+### 3. Carga do Cadastro de Clientes
+Após o deploy, você deve fazer o upload do arquivo `clientes.csv` na raiz do bucket S3 raw criado para que a Lambda consiga cruzar as vendas.
 ```bash
-python etl_pipeline.py
+aws s3 cp dados/clientes.csv s3://zero-cost-etl-dev-raw-data/clientes.csv
 ```
 
-*Ao final, verifique a pasta `output/` para ver os relatórios CSV e a pasta particionada `vendas_detalhadas/`.*
-
------
+---
 
 ## ✅ Testes Automatizados
 
-O projeto inclui testes unitários para garantir a integridade da lógica de transformação e leitura de arquivos posicionais.
+Os testes do Lambda validam o comportamento das funções de cálculo de idade, classificação de faixa etária, leitura/parse do S3 e simulam uma invocação completa do Lambda a partir de um evento mockado do Kafka.
 
-Para rodar a suíte de testes:
+Para rodar a suíte de testes unitários localmente (sem precisar de infraestrutura na AWS):
 
 ```bash
-python test_etl.py
+python test_lambda.py
 ```
 
-**O que é testado:**
-
-  * Parsing correto das posições do arquivo `vendas.txt` (garantindo que ID, Valor e Data não venham corrompidos).
-  * Lógica de Join e Agregação (Soma de valores) com dados controlados (Mock).
-
------
-
-## 📄 Exemplos de Arquivos (Input & Output)
-
-### 1\. Entrada: `vendas.txt` (Formato Posicional)
-
-Arquivo sem separadores (vírgulas ou pipes). O layout é fixo: ID(5), Cliente(5), Produto(5), Valor(8), Data(8).
-
-```text
-000010045200100000455020230512  <-- Lê-se: Venda 1, Cliente 452, Prod 100, R$ 45.50
-000020000500102001500020230512  <-- Lê-se: Venda 2, Cliente 5, Prod 102, R$ 150.00
-```
-
-### 2\. Saída: `resumo_clientes.csv`
-
-```csv
-cliente_id,nome,total_vendas,quantidade_vendas,ticket_medio
-5,Derrek,25506.01,101,252.53
-9,Derby,24507.70,100,245.08
-```
-
-### 3\. Saída: Particionamento de Diretórios (Data Lake)
-
-O pipeline organiza os dados detalhados simulando a estrutura de um Data Lake (Hive Partitioning), facilitando a leitura por dia específico:
-
-```text
-output/vendas_detalhadas/
-    ├── data_venda=2023-01-01/
-    │      └── dados.csv
-    ├── data_venda=2023-01-02/
-    │      └── dados.csv
-    └── ...
-```
-
------
-
-## 🛡️ Resiliência e Tratamento de Erros
-
-O código foi desenvolvido focando em robustez para ambientes Windows e Linux:
-
-1.  **Validação de Caminhos:** O script verifica e recria automaticamente as pastas de saída para garantir idempotência (pode rodar várias vezes sem erro).
-2.  **Try/Except Blocks:** Todas as funções críticas possuem tratamento de exceção para falhar de forma graciosa e informativa.
-3.  **Compatibilidade Windows:** Foi implementada uma estratégia híbrida na carga de dados (coleta via Spark -\> escrita via Python CSV nativo) para contornar a necessidade de binários do Hadoop (`winutils.exe`) no Windows.
+### O que é testado em [test_lambda.py](file:///c:/Projetos/etl-pyspark/test_lambda.py):
+* `test_carregar_clientes_do_s3`: Simula o download do `clientes.csv` via S3 Mock (boto3 API) e valida o parser e cache.
+* `test_calcular_idade`: Valida a lógica de cálculo de idade para anos bissextos e datas variadas.
+* `test_categorizar_faixa_etaria`: Valida se os limites de idade classificam corretamente o cliente.
+* `test_lambda_handler_sucesso`: Simula o payload de mensagens do Kafka codificado em base64, o processamento da função e a chamada correspondente de escrita no S3 curated (`put_object`) com o caminho particionado correto.
