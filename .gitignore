@@ -7,3 +7,40 @@ output/
 *.parquet
 *.xlsx
 .env
+lambda_function.zip
+
+# Python bytecode
+*.pyc
+*.pyo
+*.pyd
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Jupyter/IPython
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+*.tfvars
+*.tfvars.json
+.terraform.lock.hcl
+*.tfplan
