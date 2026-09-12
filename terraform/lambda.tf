@@ -60,9 +60,22 @@ resource "aws_iam_policy" "lambda_policy" {
         Action = [
           "ec2:CreateNetworkInterface",
           "ec2:DescribeNetworkInterfaces",
-          "ec2:DeleteNetworkInterface"
+          "ec2:DeleteNetworkInterface",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeVpcs"
         ]
         Resource = "*"
+      },
+      # A Lambda envia os lotes Kafka descartados para a fila de falhas.
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl",
+          "sqs:SendMessage"
+        ]
+        Resource = aws_sqs_queue.kafka_failures.arn
       }
     ]
   })
@@ -87,15 +100,15 @@ resource "aws_lambda_function" "etl_lambda" {
   function_name    = "${var.project_name}-${var.environment}-etl"
   role             = aws_iam_role.lambda_role.arn
   handler          = "lambda_function.lambda_handler"
-  runtime          = "python3.10"
+  runtime          = "python3.12"
   timeout          = 60  # Timeout de 1 minuto (bem dentro do limite de 15 min do Lambda)
   memory_size      = 256 # 256MB de RAM (ideal para transformações de tamanho pequeno/médio a baixo custo)
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 
   environment {
     variables = {
-      RAW_BUCKET_NAME     = aws_s3_bucket.raw_data.id
       CURATED_BUCKET_NAME = aws_s3_bucket.curated_data.id
+      CURATED_PREFIX      = "fraud-assessments"
       ENVIRONMENT         = var.environment
     }
   }
@@ -105,22 +118,6 @@ resource "aws_lambda_function" "etl_lambda" {
     FinOps      = "FreeTier"
   }
 }
-
-# Nota sobre Kafka Trigger:
-# Se estiver usando o Apache Kafka gerenciado pela própria aplicação ou hospedado em um Kafka Cloud gratuito,
-# a forma mais barata (gratuita) de integração é fazer a Lambda ser acionada via API Gateway (HTTP POST) pela aplicação Java
-# ou conectar diretamente no Kafka externo no código da Lambda. 
-#
-# Se desejar usar o trigger nativo da AWS para Apache Kafka auto-hospedado (Self-Managed Apache Kafka):
-#
-# resource "aws_lambda_event_source_mapping" "kafka_trigger" {
-#   event_source_arn  = "arn:aws:kafka:us-east-1:123456789012:cluster/nome-cluster" # ARN do cluster/evento
-#   function_name     = aws_lambda_function.etl_lambda.arn
-#   topics            = ["vendas-topic"]
-#   starting_position = "LATEST"
-# }
-#
-# A linha acima está comentada para permitir o deploy sem exigir uma infraestrutura Kafka ativa no Terraform.
 
 output "lambda_function_arn" {
   value       = aws_lambda_function.etl_lambda.arn

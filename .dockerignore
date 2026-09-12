@@ -1,0 +1,9 @@
+.git
+.idea
+.terraform
+__pycache__
+dados
+examples
+terraform
+*.pyc
+*.zip

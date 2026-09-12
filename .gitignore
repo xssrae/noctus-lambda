@@ -42,5 +42,4 @@ Thumbs.db
 *.tfstate.lock.info
 *.tfvars
 *.tfvars.json
-.terraform.lock.hcl
-*.tfplan
+*.tfplan

@@ -1,0 +1,15 @@
+{
+  "eventSource": "aws:kafka",
+  "records": {
+    "fraud-detection-topic-0": [
+      {
+        "topic": "fraud-detection-topic",
+        "partition": 0,
+        "offset": 1,
+        "timestamp": 1789042201000,
+        "timestampType": "CREATE_TIME",
+        "value": "ewogICJhc3Nlc3NtZW50SWQiOiAiNDQ0NDQ0NDQtNDQ0NC00NDQ0LTg0NDQtNDQ0NDQ0NDQ0NDQ0IiwKICAic291cmNlRXZlbnRJZCI6ICIzMzMzMzMzMy0zMzMzLTQzMzMtODMzMy0zMzMzMzMzMzMzMzMiLAogICJvcmRlcklkIjogIm9yZGVyLXJlamVjdGVkLTAwMSIsCiAgImN1c3RvbWVySWQiOiAiY3VzdG9tZXItMzAzIiwKICAib3JkZXJBbW91bnQiOiA3OTk5LjkwLAogICJjdXJyZW5jeSI6ICJCUkwiLAogICJyaXNrU2NvcmUiOiAxMDAsCiAgImRlY2lzaW9uIjogIlJFSkVDVEVEIiwKICAicmVhc29ucyI6IFsiSElHSF9WQUxVRSIsICJDT1VOVFJZX01JU01BVENIIiwgIk1VTFRJUExFX1BBWU1FTlRfQVRURU1QVFMiLCAiTkVXX0FDQ09VTlQiXSwKICAiYXNzZXNzZWRBdCI6ICIyMDI2LTA5LTEwVDEyOjEwOjAxWiIsCiAgIm1vZGVsVmVyc2lvbiI6ICJydWxlcy12MSIKfQo="
+      }
+    ]
+  }
+}

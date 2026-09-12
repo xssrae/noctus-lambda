@@ -56,6 +56,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "raw_data_lifecycle" {
     id     = "expire_old_raw_files"
     status = "Enabled"
 
+    filter {}
+
     expiration {
       days = 14
     }
@@ -74,6 +76,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "curated_data_lifecycle" {
   rule {
     id     = "expire_old_curated_files"
     status = "Enabled"
+
+    filter {}
 
     expiration {
       days = 90

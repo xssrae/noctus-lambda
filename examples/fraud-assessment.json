@@ -1,0 +1,13 @@
+{
+  "assessmentId": "44444444-4444-4444-8444-444444444444",
+  "sourceEventId": "33333333-3333-4333-8333-333333333333",
+  "orderId": "order-rejected-001",
+  "customerId": "customer-303",
+  "orderAmount": 7999.90,
+  "currency": "BRL",
+  "riskScore": 100,
+  "decision": "REJECTED",
+  "reasons": ["HIGH_VALUE", "COUNTRY_MISMATCH", "MULTIPLE_PAYMENT_ATTEMPTS", "NEW_ACCOUNT"],
+  "assessedAt": "2026-09-10T12:10:01Z",
+  "modelVersion": "rules-v1"
+}
